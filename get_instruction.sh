@@ -4,7 +4,7 @@
 # Usage: ./get_instruction <hostname> <n>
 # Extracts the nth instruction for the given hostname from instructions.txt
 
-# Function to parse a single instruction (handles multi-line format)
+# Function to parse a single instruction (handles single-line format)
 parse_instruction() {
     local input="$1"
     
@@ -14,45 +14,31 @@ parse_instruction() {
         return 1
     fi
     
-    # Split the input into lines
-    local lines
-    IFS=$'\n' read -rd '' -a lines <<< "$input"
+    # Remove the outer @ symbols
+    local content="${input:1:${#input}-2}"
     
-    # First line should be the header: @hostname:commit-code:{deps}
-    local header_line="${lines[0]}"
+    # Split by $ to get header and text instruction
+    if [[ ! "$content" =~ \$.*\$ ]]; then
+        echo "Error: Invalid format - missing text instruction delimiters"
+        return 1
+    fi
     
-    # Extract hostname, commit-code, and dependencies from header
-    if [[ ! "$header_line" =~ ^@([^:]+):([^:]+):\{([^}]*)\}$ ]]; then
-        echo "Error: Invalid header format - expected @hostname:commit-code:{deps}"
+    # Extract header (before first $)
+    local header="${content%%\$*}"
+    
+    # Extract text instruction (between $ symbols)
+    local temp="${content#*\$}"
+    local text_instruction="${temp%\$*}"
+    
+    # Parse header: hostname:commit-code:{deps}
+    if [[ ! "$header" =~ ^([^:]+):([^:]+):\{([^}]*)\}$ ]]; then
+        echo "Error: Invalid header format - expected hostname:commit-code:{deps}"
         return 1
     fi
     
     local hostname="${BASH_REMATCH[1]}"
     local commit_code="${BASH_REMATCH[2]}"
     local dependencies="${BASH_REMATCH[3]}"
-    
-    # Find the text instruction (lines that start with $)
-    local text_instruction=""
-    local found_text=false
-    
-    for line in "${lines[@]}"; do
-        if [[ "$line" =~ ^\$(.*)$ ]]; then
-            if [[ $found_text == true ]]; then
-                text_instruction="${text_instruction} ${BASH_REMATCH[1]}"
-            else
-                text_instruction="${BASH_REMATCH[1]}"
-                found_text=true
-            fi
-        fi
-    done
-    
-    # Remove trailing "@" if present
-    text_instruction="${text_instruction%@}"
-    
-    if [[ $found_text == false ]]; then
-        echo "Error: No text instruction found (should start with $)"
-        return 1
-    fi
     
     # Output parsed components
     echo "=== INSTRUCTION #$current_instruction_num ==="
@@ -76,39 +62,21 @@ extract_instructions_for_hostname() {
     fi
     
     local instructions=()
-    local current_instruction=""
-    local in_instruction=false
     
     # Read the file line by line
     while IFS= read -r line || [[ -n "$line" ]]; do
-        # Check if line starts with @ but is not just @
-        if [[ "$line" =~ ^@[^@]*$ ]] && [[ "$line" != "@" ]]; then
-            # This is the start of an instruction
-            in_instruction=true
-            current_instruction="$line"
-        elif [[ "$line" == "@" ]]; then
-            # This is the end of an instruction
-            if [[ $in_instruction == true ]]; then
-                current_instruction="${current_instruction}@"
-                
-                # Check if this instruction is for our target hostname
-                local inst_hostname=""
-                # Extract hostname from the first line of the instruction
-                local first_line="${current_instruction%%$'\n'*}"
-                if [[ "$first_line" =~ ^@([^:]+): ]]; then
-                    inst_hostname="${BASH_REMATCH[1]}"
-                fi
-                
+        # Skip empty lines and comments
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+        
+        # Check if this is a complete single-line instruction
+        if [[ "$line" =~ ^@.*@$ ]]; then
+            # Extract hostname from the instruction
+            if [[ "$line" =~ ^@([^:]+): ]]; then
+                local inst_hostname="${BASH_REMATCH[1]}"
                 if [[ "$inst_hostname" == "$target_hostname" ]]; then
-                    instructions+=("$current_instruction")
+                    instructions+=("$line")
                 fi
-                
-                current_instruction=""
-                in_instruction=false
             fi
-        elif [[ $in_instruction == true ]] && [[ -n "$line" ]]; then
-            # This is a continuation of the current instruction
-            current_instruction="${current_instruction}"$'\n'"$line"
         fi
     done < "$instructions_file"
     
@@ -125,7 +93,7 @@ show_help() {
     echo "  n          The instruction number to retrieve (1-indexed)"
     echo ""
     echo "Options:"
-    echo "  -f, --file FILE    Path to instructions file (default: demo_appliation/instructions.txt)"
+    echo "  -f, --file FILE    Path to instructions file (default: instructions.txt)"
     echo "  -l, --list         List all instructions for the hostname"
     echo "  -c, --count        Show count of instructions for the hostname"
     echo "  -r, --raw          Output raw instruction without parsing"
@@ -263,4 +231,4 @@ if [[ $raw_mode == true ]]; then
     echo "$target_instruction"
 else
     parse_instruction "$target_instruction"
-fi 
+fi

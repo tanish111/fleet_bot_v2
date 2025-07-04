@@ -13,7 +13,6 @@ This document outlines the protocol for GEMINI to operate as an individual bot i
 ---
 
 ### Implementation MODE  
-
 #### 1. **Check Git Log for Dependencies**  
     - Use `git log` to review commit history.  
     - Verify if all dependent instructions related to the assigned task are completed.  

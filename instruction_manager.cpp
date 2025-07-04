@@ -50,7 +50,7 @@ private:
     
     // Execute gemini command with given prompt
     void executeGeminiCommand(const std::string& prompt) {
-        std::string command = "gemini -y -c --model gemini-2.5-flash -p \"Implementation MODE:- Read GEMINI.md " + prompt + "\"";
+        std::string command = "echo '\"Implementation MODE:- Read GEMINI.md " + prompt + "\"' | gemini -y -c --model gemini-2.5-flash";
         std::cout << "Executing Gemini command..." << std::endl;
         std::string result = executeCommand(command);
         std::cout << "Gemini result: " << result << std::endl;
